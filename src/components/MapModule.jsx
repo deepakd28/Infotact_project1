@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
@@ -21,12 +21,12 @@ L.Marker.prototype.options.icon = DefaultIcon;
 
 export default function MapModule() {
   const [filterType, setFilterType] = useState('ALL');
-  
+
   // Structuring mock IoT node telemetry to mirror your backend state definitions
   const mockGridNodes = [
-    { id: "NODE-001", type: "Solar Array", state: "Idle", output: "0 MW (Storm Impacted)", lat: 40.7128, lng: -74.0060 },
-    { id: "NODE-002", type: "Home Battery Wall", state: "Discharging", output: "+12.5 MW (Rerouting)", lat: 40.7250, lng: -74.0100 },
-    { id: "NODE-003", type: "Industrial Substation", state: "Charging", output: "-5.0 MW", lat: 40.7350, lng: -73.9900 }
+    { id: "NODE-001", type: "Solar Farm", state: "Idle", output: "0 MW (Grid Balancing)", lat: 28.644800, lng: 77.216721 },
+    { id: "NODE-002", type: "Battery Storage", state: "Discharging", output: "+15.2 MW (Peak Load)", lat: 28.650000, lng: 77.210000 },
+    { id: "NODE-003", type: "Substation", state: "Charging", output: "-8.4 MW", lat: 28.638000, lng: 77.225000 }
   ];
 
   // Helper helper function to assign colors to Spring State Machine states
@@ -63,8 +63,11 @@ export default function MapModule() {
     return node.type === filterType;
   });
 
-  // Center point of your city grid (New York area based on mock coordinates)
-  const mapCenter = [40.7250, -74.0060];
+  // Center point of your city grid (Delhi, India)
+  const mapCenter = [
+    mockGridNodes.reduce((sum, node) => sum + node.lat, 0) / mockGridNodes.length,
+    mockGridNodes.reduce((sum, node) => sum + node.lng, 0) / mockGridNodes.length
+  ];
 
   return (
     <div style={{
@@ -83,7 +86,7 @@ export default function MapModule() {
 
      {/* Live Leaflet Map Container Canvas */}
       <div style={{
-        height: '400px',
+        height: 'clamp(320px, 55vh, 520px)',
         width: '100%',
         backgroundColor: '#111827',
         borderRadius: '6px',
@@ -97,8 +100,8 @@ export default function MapModule() {
             url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
           />
           
-          {mockGridNodes.map((node) => (
-            <Marker key={node.id} position={[node.lat, node.lng]}>
+          {filteredNodes.map((node) => (
+            <Marker key={node.id} position={[node.lat, node.lng]} icon={createCustomIcon(getStateColor(node.state))}>
               <Popup>
                 <div style={{ color: '#1f2937', fontFamily: 'sans-serif', minWidth: '160px' }}>
                   <h4 style={{ margin: '0 0 4px 0', color: '#111827' }}>⚡ {node.id}</h4>
@@ -132,7 +135,7 @@ export default function MapModule() {
               </tr>
             </thead>
             <tbody>
-              {mockGridNodes.map(node => (
+              {filteredNodes.map(node => (
                 <tr key={node.id} style={{ borderBottom: '1px solid #111827', color: '#e5e7eb' }}>
                   <td style={{ padding: '0.75rem 0.5rem', fontWeight: '500' }}>{node.id}</td>
                   <td style={{ padding: '0.75rem 0.5rem' }}>{node.type}</td>
