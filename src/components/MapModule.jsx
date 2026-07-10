@@ -20,6 +20,8 @@ let DefaultIcon = L.icon({
 L.Marker.prototype.options.icon = DefaultIcon;
 
 export default function MapModule() {
+  const [filterType, setFilterType] = useState('ALL');
+  
   // Structuring mock IoT node telemetry to mirror your backend state definitions
   const mockGridNodes = [
     { id: "NODE-001", type: "Solar Array", state: "Idle", output: "0 MW (Storm Impacted)", lat: 40.7128, lng: -74.0060 },
@@ -36,6 +38,30 @@ export default function MapModule() {
       default: return '#9ca3af';
     }
   };
+
+  // Generates custom glowing dots instead of bulky default Leaflet icons
+  const createCustomIcon = (color) => {
+    return new L.DivIcon({
+      html: `<span style="
+        background-color: ${color}; 
+        width: 14px; 
+        height: 14px; 
+        display: block; 
+        border-radius: 50%; 
+        border: 2px solid #ffffff; 
+        box-shadow: 0 0 10px ${color}, 0 0 4px ${color};
+      "></span>`,
+      className: 'custom-grid-marker',
+      iconSize: [14, 14],
+      iconAnchor: [7, 7],
+      popupAnchor: [0, -7]
+    });
+  };
+
+  const filteredNodes = mockGridNodes.filter(node => {
+    if (filterType === 'ALL') return true;
+    return node.type === filterType;
+  });
 
   // Center point of your city grid (New York area based on mock coordinates)
   const mapCenter = [40.7250, -74.0060];
