@@ -1,5 +1,24 @@
 import React from 'react';
 
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import L from 'leaflet';
+
+// Import Leaflet core styles so the map tiles position themselves correctly
+import 'leaflet/dist/leaflet.css';
+
+// Fix for default Leaflet marker assets breaking under modern bundlers like Vite
+import markerIcon from 'leaflet/dist/images/marker-icon.png';
+import markerShadow from 'leaflet/dist/images/marker-shadow.png';
+
+let DefaultIcon = L.icon({
+    iconUrl: markerIcon,
+    shadowUrl: markerShadow,
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34]
+});
+L.Marker.prototype.options.icon = DefaultIcon;
+
 export default function MapModule() {
   // Structuring mock IoT node telemetry to mirror your backend state definitions
   const mockGridNodes = [
@@ -18,6 +37,9 @@ export default function MapModule() {
     }
   };
 
+  // Center point of your city grid (New York area based on mock coordinates)
+  const mapCenter = [40.7250, -74.0060];
+
   return (
     <div style={{
       border: '1px solid #374151',
@@ -29,27 +51,41 @@ export default function MapModule() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <h3 style={{ margin: 0, color: '#f3f4f6' }}>🗺️ GIS Live Topology View</h3>
         <span style={{ fontSize: '0.8rem', background: '#374151', padding: '4px 8px', borderRadius: '4px', color: '#9ca3af' }}>
-          Dependencies Ready: react-leaflet
+          Map Engine: Active
         </span>
       </div>
 
-      {/* Visual Placeholder for the Leaflet Container */}
+     {/* Live Leaflet Map Container Canvas */}
       <div style={{
-        height: '350px',
+        height: '400px',
+        width: '100%',
         backgroundColor: '#111827',
-        border: '2px dashed #4b5563',
         borderRadius: '6px',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: '1rem'
+        overflow: 'hidden',
+        position: 'relative',
+        zIndex: 1 
       }}>
-        <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🗺️</div>
-        <div style={{ fontWeight: 'bold', color: '#e5e7eb' }}>Leaflet Map Container Scaffolding</div>
-        <p style={{ color: '#9ca3af', fontSize: '0.85rem', maxWidth: '400px', textAlign: 'center', margin: '4px 0 0 0' }}>
-          Step 1 Complete. Tomorrow this container will render interactive open-source tiles bound to incoming Kafka event offsets.
-        </p>
+       <MapContainer center={mapCenter} zoom={12} style={{ height: '100%', width: '100%' }}>
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          />
+          
+          {mockGridNodes.map((node) => (
+            <Marker key={node.id} position={[node.lat, node.lng]}>
+              <Popup>
+                <div style={{ color: '#1f2937', fontFamily: 'sans-serif', minWidth: '160px' }}>
+                  <h4 style={{ margin: '0 0 4px 0', color: '#111827' }}>⚡ {node.id}</h4>
+                  <div style={{ fontSize: '0.85rem', margin: '2px 0' }}><strong>Type:</strong> {node.type}</div>
+                  <div style={{ fontSize: '0.85rem', margin: '2px 0' }}>
+                    <strong>State:</strong> <span style={{ color: getStateColor(node.state), fontWeight: 'bold' }}>{node.state}</span>
+                  </div>
+                  <div style={{ fontSize: '0.85rem', margin: '2px 0' }}><strong>Metrics:</strong> {node.output}</div>
+                </div>
+              </Popup>
+            </Marker>
+          ))}
+        </MapContainer>
       </div>
 
       {/* Simulated Telemetry Streams Table */}
@@ -94,6 +130,41 @@ export default function MapModule() {
               ))}
             </tbody>
           </table>
+        </div>
+      </div>
+      <div style={{ marginTop: '2rem', borderTop: '1px solid #374151', paddingTop: '1.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          <h4 style={{ color: '#9ca3af', margin: 0, fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            📜 Real-time System Event Log (Reactive Audit Trail)
+          </h4>
+          <span style={{ fontSize: '0.75rem', color: '#60a5fa', background: 'rgba(96, 165, 250, 0.1)', padding: '2px 6px', borderRadius: '4px' }}>
+            Kafka Sync Pending
+          </span>
+        </div>
+
+        <div style={{ 
+          backgroundColor: '#111827', 
+          borderRadius: '6px', 
+          padding: '1rem', 
+          maxHeight: '150px', 
+          overflowY: 'auto',
+          fontFamily: 'monospace',
+          fontSize: '0.85rem',
+          border: '1px solid #1f2937',
+          lineHeight: '1.5'
+        }}>
+          <div style={{ color: '#ef4444', marginBottom: '0.4rem' }}>
+            [2026-07-10 14:32:01] <span style={{ color: '#9ca3af' }}>[SYS_ALARM]</span> Storm front detected in Zone A. 50,000 Solar connections fluctuating.
+          </div>
+          <div style={{ color: '#f59e0b', marginBottom: '0.4rem' }}>
+            [2026-07-10 14:32:02] <span style={{ color: '#9ca3af' }}>[STATE_ENG]</span> NODE-001 tripped transition: <span style={{ fontWeight: 'bold' }}>Charging → Idle</span>
+          </div>
+          <div style={{ color: '#10b981', marginBottom: '0.4rem' }}>
+            [2026-07-10 14:32:03] <span style={{ color: '#9ca3af' }}>[SMART_GRID]</span> Triggered discharge event to NODE-002 (Home Battery Wall). +12.5 MW injection active.
+          </div>
+          <div style={{ color: '#9ca3af' }}>
+            [2026-07-10 14:32:05] <span style={{ color: '#9ca3af' }}>[SYS_INFO]</span> Grid load stabilized at 60Hz frequency balancer target.
+          </div>
         </div>
       </div>
     </div>
