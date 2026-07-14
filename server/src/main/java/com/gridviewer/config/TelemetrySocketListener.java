@@ -1,4 +1,4 @@
-package com.gridviewer.server.config;
+package com.gridviewer.config;
 
 import java.io.IOException;
 import java.net.ServerSocket;
