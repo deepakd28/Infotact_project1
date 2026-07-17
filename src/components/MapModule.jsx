@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 import { MapContainer, TileLayer, Marker, Popup, Polyline, ScaleControl } from 'react-leaflet';
 import L from 'leaflet';
+import { useGridSocket } from '../hooks/useGridSocket';
 
 // Import Leaflet core styles so the map tiles position themselves correctly
 import 'leaflet/dist/leaflet.css';
@@ -21,6 +22,9 @@ L.Marker.prototype.options.icon = DefaultIcon;
 
 export default function MapModule() {
   const [filterType, setFilterType] = useState('ALL');
+  const socketUrl = import.meta.env.VITE_GRID_SOCKET_URL || 'ws://localhost:8080/telemetry';
+  const { isConnected, latestData } = useGridSocket(socketUrl);
+  const [liveNodeUpdates, setLiveNodeUpdates] = useState({});
 
   // Structuring mock IoT node telemetry to mirror your backend state definitions
   const mockGridNodes = [
@@ -58,10 +62,45 @@ export default function MapModule() {
     });
   };
 
-  const filteredNodes = mockGridNodes.filter(node => {
-    if (filterType === 'ALL') return true;
-    return node.type === filterType;
-  });
+  useEffect(() => {
+    if (!latestData) return;
+    const incomingEvents = Array.isArray(latestData) ? latestData : [latestData];
+    setLiveNodeUpdates((prev) => {
+      const next = { ...prev };
+      incomingEvents.forEach((event) => {
+        if (!event.nodeId) return;
+        next[event.nodeId] = {
+          ...(next[event.nodeId] || {}),
+          ...event,
+          lastSeen: new Date().toISOString()
+        };
+      });
+      return next;
+    });
+  }, [latestData]);
+
+  const mergeNode = (node) => {
+    const update = liveNodeUpdates[node.id] || {};
+    return {
+      ...node,
+      state: update.state || node.state,
+      output: update.output || node.output,
+      status: update.status || node.state,
+      lastSeen: update.lastSeen || null
+    };
+  };
+
+  const filteredNodes = mockGridNodes
+    .map(mergeNode)
+    .filter((node) => {
+      if (filterType === 'ALL') return true;
+      return node.type === filterType;
+    });
+
+  const lastUpdateAt = Object.values(liveNodeUpdates).reduce((latest, item) => {
+    if (!item.lastSeen) return latest;
+    return latest > item.lastSeen ? latest : item.lastSeen;
+  }, '');
 
   // Center point of your city grid (Delhi, India)
   const mapCenter = [
@@ -84,9 +123,19 @@ export default function MapModule() {
           <h3 style={{ margin: 0, color: '#f3f4f6' }}>🗺️ GIS Live Topology View</h3>
           <p style={{ margin: '0.5rem 0 0', color: '#9ca3af', fontSize: '0.9rem' }}>Static city grid scaffold with mock node markers</p>
         </div>
-        <span style={{ fontSize: '0.8rem', background: '#374151', padding: '4px 8px', borderRadius: '4px', color: '#9ca3af' }}>
-          Map Engine: Active
-        </span>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ fontSize: '0.8rem', background: '#374151', padding: '4px 8px', borderRadius: '4px', color: '#9ca3af' }}>
+            Map Engine: Active
+          </span>
+          <span style={{ fontSize: '0.8rem', background: isConnected ? '#10b981' : '#ef4444', padding: '4px 8px', borderRadius: '4px', color: '#f9fafb' }}>
+            {isConnected ? 'WS Connected' : 'WS Disconnected'}
+          </span>
+          {lastUpdateAt && (
+            <span style={{ fontSize: '0.8rem', background: '#111827', padding: '4px 8px', borderRadius: '4px', color: '#9ca3af', border: '1px solid #374151' }}>
+              Last update: {new Date(lastUpdateAt).toLocaleTimeString()}
+            </span>
+          )}
+        </div>
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1.25rem' }}>
