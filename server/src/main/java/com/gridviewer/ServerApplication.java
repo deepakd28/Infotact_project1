@@ -1,4 +1,4 @@
-package com.gridviewer.server;
+package com.gridviewer;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
