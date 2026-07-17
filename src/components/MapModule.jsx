@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, ScaleControl } from 'react-leaflet';
 import L from 'leaflet';
 
 // Import Leaflet core styles so the map tiles position themselves correctly
@@ -69,6 +69,8 @@ export default function MapModule() {
     mockGridNodes.reduce((sum, node) => sum + node.lng, 0) / mockGridNodes.length
   ];
 
+  const nodeTypes = ['ALL', 'Solar Farm', 'Battery Storage', 'Substation'];
+
   return (
     <div style={{
       border: '1px solid #374151',
@@ -77,11 +79,37 @@ export default function MapModule() {
       backgroundColor: '#1f2937',
       boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
     }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-        <h3 style={{ margin: 0, color: '#f3f4f6' }}>🗺️ GIS Live Topology View</h3>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+        <div>
+          <h3 style={{ margin: 0, color: '#f3f4f6' }}>🗺️ GIS Live Topology View</h3>
+          <p style={{ margin: '0.5rem 0 0', color: '#9ca3af', fontSize: '0.9rem' }}>Static city grid scaffold with mock node markers</p>
+        </div>
         <span style={{ fontSize: '0.8rem', background: '#374151', padding: '4px 8px', borderRadius: '4px', color: '#9ca3af' }}>
           Map Engine: Active
         </span>
+      </div>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1.25rem' }}>
+        {nodeTypes.map(type => (
+          <button
+            key={type}
+            type="button"
+            onClick={() => setFilterType(type)}
+            style={{
+              cursor: 'pointer',
+              border: '1px solid #374151',
+              background: filterType === type ? '#10b981' : '#111827',
+              color: filterType === type ? '#f9fafb' : '#9ca3af',
+              padding: '0.65rem 0.9rem',
+              borderRadius: '999px',
+              fontSize: '0.85rem',
+              transition: 'background 0.2s, color 0.2s',
+              minWidth: '110px'
+            }}
+          >
+            {type}
+          </button>
+        ))}
       </div>
 
      {/* Live Leaflet Map Container Canvas */}
@@ -95,11 +123,15 @@ export default function MapModule() {
         zIndex: 1 
       }}>
        <MapContainer center={mapCenter} zoom={12} style={{ height: '100%', width: '100%' }}>
+          <ScaleControl position="bottomleft" />
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
             url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
           />
-          
+          <Polyline
+            pathOptions={{ color: '#60a5fa', weight: 2, dashArray: '8 6', opacity: 0.75 }}
+            positions={mockGridNodes.map(node => [node.lat, node.lng])}
+          />
           {filteredNodes.map((node) => (
             <Marker key={node.id} position={[node.lat, node.lng]} icon={createCustomIcon(getStateColor(node.state))}>
               <Popup>
