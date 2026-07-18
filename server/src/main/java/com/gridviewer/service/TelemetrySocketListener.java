@@ -1,11 +1,15 @@
 package com.gridviewer.service;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
+import java.time.Instant;
 import java.util.concurrent.ExecutorService;
 
+import com.gridviewer.models.TelemetryEvent;
 import org.springframework.stereotype.Component;
 
 import jakarta.annotation.PostConstruct;
@@ -15,11 +19,13 @@ import jakarta.annotation.PreDestroy;
 public class TelemetrySocketListener {
 
     private final ExecutorService executor;
+    private final TelemetryQueue telemetryQueue;
     private ServerSocket serverSocket;
     private volatile boolean running = true;
 
-    public TelemetrySocketListener(ExecutorService virtualThreadExecutor) {
+    public TelemetrySocketListener(ExecutorService virtualThreadExecutor, TelemetryQueue telemetryQueue) {
         this.executor = virtualThreadExecutor;
+        this.telemetryQueue = telemetryQueue;
     }
 
     @PostConstruct
@@ -49,8 +55,42 @@ public class TelemetrySocketListener {
     }
 
     private void handleConnection(Socket socket) {
-        // placeholder: just keep it open and log for now
-        System.out.println("Connection accepted: " + socket.getRemoteSocketAddress());
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                TelemetryEvent event = parseLine(line);
+                if (event != null) {
+                    telemetryQueue.put(event);
+                }
+            }
+        } catch (IOException e) {
+            // Common when client disconnects or connection is closed
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } finally {
+            try {
+                socket.close();
+            } catch (IOException e) {
+                // ignore
+            }
+        }
+    }
+
+    private TelemetryEvent parseLine(String line) {
+        if (line == null || line.isBlank()) {
+            return null;
+        }
+        int colonIdx = line.indexOf(':');
+        String nodeId;
+        String payload;
+        if (colonIdx != -1) {
+            nodeId = line.substring(0, colonIdx).trim();
+            payload = line.substring(colonIdx + 1).trim();
+        } else {
+            nodeId = "unknown";
+            payload = line.trim();
+        }
+        return new TelemetryEvent(nodeId, payload, Instant.now());
     }
 
     @PreDestroy
