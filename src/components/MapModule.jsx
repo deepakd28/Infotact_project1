@@ -39,26 +39,41 @@ export default function MapModule() {
       case 'Discharging': return '#ef4444'; // Red/Orange for active supply drain
       case 'Charging': return '#10b981';    // Green for taking power
       case 'Idle': return '#f59e0b';        // Amber for down/standby
+      case 'Alert': return '#f97316';       // Warning
+      case 'Offline': return '#6b7280';     // Gray for stale/offline
       default: return '#9ca3af';
     }
   };
 
+  const isNodeStale = (node) => {
+    if (!node.lastSeen) return false;
+    const age = Date.now() - new Date(node.lastSeen).getTime();
+    return age > 20_000;
+  };
+
+  const getNodeIconProperties = (node) => {
+    const stateKey = node.status || node.state;
+    const color = isNodeStale(node) ? '#6b7280' : getStateColor(stateKey);
+    const size = node.status === 'Alert' ? 18 : stateKey === 'Discharging' ? 16 : 14;
+    return { color, size };
+  };
+
   // Generates custom glowing dots instead of bulky default Leaflet icons
-  const createCustomIcon = (color) => {
+  const createCustomIcon = (color, size = 14) => {
     return new L.DivIcon({
       html: `<span style="
         background-color: ${color}; 
-        width: 14px; 
-        height: 14px; 
+        width: ${size}px; 
+        height: ${size}px; 
         display: block; 
         border-radius: 50%; 
         border: 2px solid #ffffff; 
-        box-shadow: 0 0 10px ${color}, 0 0 4px ${color};
+        box-shadow: 0 0 ${size / 1.5}px ${color}, 0 0 ${Math.max(4, size / 3)}px ${color};
       "></span>`,
       className: 'custom-grid-marker',
-      iconSize: [14, 14],
-      iconAnchor: [7, 7],
-      popupAnchor: [0, -7]
+      iconSize: [size, size],
+      iconAnchor: [Math.round(size / 2), Math.round(size / 2)],
+      popupAnchor: [0, -Math.round(size / 2)]
     });
   };
 
@@ -181,20 +196,26 @@ export default function MapModule() {
             pathOptions={{ color: '#60a5fa', weight: 2, dashArray: '8 6', opacity: 0.75 }}
             positions={mockGridNodes.map(node => [node.lat, node.lng])}
           />
-          {filteredNodes.map((node) => (
-            <Marker key={node.id} position={[node.lat, node.lng]} icon={createCustomIcon(getStateColor(node.state))}>
-              <Popup>
-                <div style={{ color: '#1f2937', fontFamily: 'sans-serif', minWidth: '160px' }}>
-                  <h4 style={{ margin: '0 0 4px 0', color: '#111827' }}>⚡ {node.id}</h4>
-                  <div style={{ fontSize: '0.85rem', margin: '2px 0' }}><strong>Type:</strong> {node.type}</div>
-                  <div style={{ fontSize: '0.85rem', margin: '2px 0' }}>
-                    <strong>State:</strong> <span style={{ color: getStateColor(node.state), fontWeight: 'bold' }}>{node.state}</span>
+          {filteredNodes.map((node) => {
+            const { color, size } = getNodeIconProperties(node);
+            return (
+              <Marker key={node.id} position={[node.lat, node.lng]} icon={createCustomIcon(color, size)}>
+                <Popup>
+                  <div style={{ color: '#1f2937', fontFamily: 'sans-serif', minWidth: '160px' }}>
+                    <h4 style={{ margin: '0 0 4px 0', color: '#111827' }}>⚡ {node.id}</h4>
+                    <div style={{ fontSize: '0.85rem', margin: '2px 0' }}><strong>Type:</strong> {node.type}</div>
+                    <div style={{ fontSize: '0.85rem', margin: '2px 0' }}>
+                      <strong>State:</strong> <span style={{ color, fontWeight: 'bold' }}>{node.status || node.state}</span>
+                    </div>
+                    <div style={{ fontSize: '0.85rem', margin: '2px 0' }}><strong>Metrics:</strong> {node.output}</div>
+                    {node.lastSeen && (
+                      <div style={{ fontSize: '0.75rem', marginTop: '6px', color: '#6b7280' }}>Updated {new Date(node.lastSeen).toLocaleTimeString()}</div>
+                    )}
                   </div>
-                  <div style={{ fontSize: '0.85rem', margin: '2px 0' }}><strong>Metrics:</strong> {node.output}</div>
-                </div>
-              </Popup>
-            </Marker>
-          ))}
+                </Popup>
+              </Marker>
+            );
+          })}
         </MapContainer>
       </div>
 
