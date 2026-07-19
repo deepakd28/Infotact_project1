@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
 import { MapContainer, TileLayer, Marker, Popup, Polyline, ScaleControl } from 'react-leaflet';
 import L from 'leaflet';
 import { useGridSocket } from '../hooks/useGridSocket';
+import { applyIncomingNodeUpdates } from '../utils/telemetry';
 
 // Import Leaflet core styles so the map tiles position themselves correctly
 import 'leaflet/dist/leaflet.css';
@@ -11,37 +12,42 @@ import 'leaflet/dist/leaflet.css';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 
-let DefaultIcon = L.icon({
-    iconUrl: markerIcon,
-    shadowUrl: markerShadow,
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34]
+const DefaultIcon = L.icon({
+  iconUrl: markerIcon,
+  shadowUrl: markerShadow,
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34]
 });
 L.Marker.prototype.options.icon = DefaultIcon;
 
 export default function MapModule() {
   const [filterType, setFilterType] = useState('ALL');
   const socketUrl = import.meta.env.VITE_GRID_SOCKET_URL || 'ws://localhost:8080/telemetry';
-  const { isConnected, latestData } = useGridSocket(socketUrl);
+  const { isConnected, latestData, socketError } = useGridSocket(socketUrl);
   const [liveNodeUpdates, setLiveNodeUpdates] = useState({});
+  const [liveEventCount, setLiveEventCount] = useState(0);
 
-  // Structuring mock IoT node telemetry to mirror your backend state definitions
-  const mockGridNodes = [
-    { id: "NODE-001", type: "Solar Farm", state: "Idle", output: "0 MW (Grid Balancing)", lat: 28.644800, lng: 77.216721 },
-    { id: "NODE-002", type: "Battery Storage", state: "Discharging", output: "+15.2 MW (Peak Load)", lat: 28.650000, lng: 77.210000 },
-    { id: "NODE-003", type: "Substation", state: "Charging", output: "-8.4 MW", lat: 28.638000, lng: 77.225000 }
-  ];
+  const mockGridNodes = useMemo(() => [
+    { id: 'NODE-001', type: 'Solar Farm', state: 'Idle', output: '0 MW (Grid Balancing)', lat: 28.6448, lng: 77.216721 },
+    { id: 'NODE-002', type: 'Battery Storage', state: 'Discharging', output: '+15.2 MW (Peak Load)', lat: 28.65, lng: 77.21 },
+    { id: 'NODE-003', type: 'Substation', state: 'Charging', output: '-8.4 MW', lat: 28.638, lng: 77.225 }
+  ], []);
 
-  // Helper helper function to assign colors to Spring State Machine states
   const getStateColor = (state) => {
-    switch(state) {
-      case 'Discharging': return '#ef4444'; // Red/Orange for active supply drain
-      case 'Charging': return '#10b981';    // Green for taking power
-      case 'Idle': return '#f59e0b';        // Amber for down/standby
-      case 'Alert': return '#f97316';       // Warning
-      case 'Offline': return '#6b7280';     // Gray for stale/offline
-      default: return '#9ca3af';
+    switch (state) {
+      case 'Discharging':
+        return '#ef4444';
+      case 'Charging':
+        return '#10b981';
+      case 'Idle':
+        return '#f59e0b';
+      case 'Alert':
+        return '#f97316';
+      case 'Offline':
+        return '#6b7280';
+      default:
+        return '#9ca3af';
     }
   };
 
@@ -54,54 +60,51 @@ export default function MapModule() {
   const getNodeIconProperties = (node) => {
     const stateKey = node.status || node.state;
     const color = isNodeStale(node) ? '#6b7280' : getStateColor(stateKey);
-    const size = node.status === 'Alert' ? 18 : stateKey === 'Discharging' ? 16 : 14;
+    const size = stateKey === 'Alert' ? 18 : stateKey === 'Discharging' ? 16 : 14;
     return { color, size };
   };
 
-  // Generates custom glowing dots instead of bulky default Leaflet icons
-  const createCustomIcon = (color, size = 14) => {
-    return new L.DivIcon({
-      html: `<span style="
-        background-color: ${color}; 
-        width: ${size}px; 
-        height: ${size}px; 
-        display: block; 
-        border-radius: 50%; 
-        border: 2px solid #ffffff; 
-        box-shadow: 0 0 ${size / 1.5}px ${color}, 0 0 ${Math.max(4, size / 3)}px ${color};
-      "></span>`,
-      className: 'custom-grid-marker',
-      iconSize: [size, size],
-      iconAnchor: [Math.round(size / 2), Math.round(size / 2)],
-      popupAnchor: [0, -Math.round(size / 2)]
-    });
-  };
+  const createCustomIcon = (color, size = 14) => new L.DivIcon({
+    html: `<span style="
+      background-color: ${color};
+      width: ${size}px;
+      height: ${size}px;
+      display: block;
+      border-radius: 50%;
+      border: 2px solid #ffffff;
+      box-shadow: 0 0 ${size / 1.5}px ${color}, 0 0 ${Math.max(4, size / 3)}px ${color};
+    "></span>`,
+    className: 'custom-grid-marker',
+    iconSize: [size, size],
+    iconAnchor: [Math.round(size / 2), Math.round(size / 2)],
+    popupAnchor: [0, -Math.round(size / 2)]
+  });
 
   useEffect(() => {
     if (!latestData) return;
+
     const incomingEvents = Array.isArray(latestData) ? latestData : [latestData];
-    setLiveNodeUpdates((prev) => {
-      const next = { ...prev };
-      incomingEvents.forEach((event) => {
-        if (!event.nodeId) return;
-        next[event.nodeId] = {
-          ...(next[event.nodeId] || {}),
-          ...event,
-          lastSeen: new Date().toISOString()
-        };
-      });
-      return next;
-    });
+    const hasNodeEvents = incomingEvents.some((event) => event && event.nodeId);
+
+    if (!hasNodeEvents) return;
+
+    setLiveNodeUpdates((prev) => applyIncomingNodeUpdates(prev, latestData));
+    setLiveEventCount((count) => count + 1);
   }, [latestData]);
 
   const mergeNode = (node) => {
     const update = liveNodeUpdates[node.id] || {};
+    const resolvedState = update.state || update.status || node.state;
+
     return {
       ...node,
-      state: update.state || node.state,
+      state: resolvedState,
       output: update.output || node.output,
-      status: update.status || node.state,
-      lastSeen: update.lastSeen || null
+      status: resolvedState,
+      lastSeen: update.lastSeen || null,
+      lat: update.lat ?? node.lat,
+      lng: update.lng ?? node.lng,
+      type: update.type || node.type
     };
   };
 
@@ -117,7 +120,6 @@ export default function MapModule() {
     return latest > item.lastSeen ? latest : item.lastSeen;
   }, '');
 
-  // Center point of your city grid (Delhi, India)
   const mapCenter = [
     mockGridNodes.reduce((sum, node) => sum + node.lat, 0) / mockGridNodes.length,
     mockGridNodes.reduce((sum, node) => sum + node.lng, 0) / mockGridNodes.length
@@ -136,7 +138,7 @@ export default function MapModule() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <h3 style={{ margin: 0, color: '#f3f4f6' }}>🗺️ GIS Live Topology View</h3>
-          <p style={{ margin: '0.5rem 0 0', color: '#9ca3af', fontSize: '0.9rem' }}>Static city grid scaffold with mock node markers</p>
+          <p style={{ margin: '0.5rem 0 0', color: '#9ca3af', fontSize: '0.9rem' }}>Live telemetry now drives the marker state, color, and status badges.</p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
           <span style={{ fontSize: '0.8rem', background: '#374151', padding: '4px 8px', borderRadius: '4px', color: '#9ca3af' }}>
@@ -144,6 +146,9 @@ export default function MapModule() {
           </span>
           <span style={{ fontSize: '0.8rem', background: isConnected ? '#10b981' : '#ef4444', padding: '4px 8px', borderRadius: '4px', color: '#f9fafb' }}>
             {isConnected ? 'WS Connected' : 'WS Disconnected'}
+          </span>
+          <span style={{ fontSize: '0.8rem', background: '#111827', padding: '4px 8px', borderRadius: '4px', color: '#9ca3af', border: '1px solid #374151' }}>
+            {liveEventCount} live events
           </span>
           {lastUpdateAt && (
             <span style={{ fontSize: '0.8rem', background: '#111827', padding: '4px 8px', borderRadius: '4px', color: '#9ca3af', border: '1px solid #374151' }}>
@@ -153,8 +158,14 @@ export default function MapModule() {
         </div>
       </div>
 
+      {socketError && (
+        <div style={{ marginBottom: '1rem', padding: '0.75rem 0.9rem', borderRadius: '6px', background: 'rgba(239, 68, 68, 0.12)', color: '#fecaca', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+          {socketError}
+        </div>
+      )}
+
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1.25rem' }}>
-        {nodeTypes.map(type => (
+        {nodeTypes.map((type) => (
           <button
             key={type}
             type="button"
@@ -176,7 +187,6 @@ export default function MapModule() {
         ))}
       </div>
 
-     {/* Live Leaflet Map Container Canvas */}
       <div style={{
         height: 'clamp(320px, 55vh, 520px)',
         width: '100%',
@@ -184,9 +194,9 @@ export default function MapModule() {
         borderRadius: '6px',
         overflow: 'hidden',
         position: 'relative',
-        zIndex: 1 
+        zIndex: 1
       }}>
-       <MapContainer center={mapCenter} zoom={12} style={{ height: '100%', width: '100%' }}>
+        <MapContainer center={mapCenter} zoom={12} style={{ height: '100%', width: '100%' }}>
           <ScaleControl position="bottomleft" />
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
@@ -194,14 +204,14 @@ export default function MapModule() {
           />
           <Polyline
             pathOptions={{ color: '#60a5fa', weight: 2, dashArray: '8 6', opacity: 0.75 }}
-            positions={mockGridNodes.map(node => [node.lat, node.lng])}
+            positions={mockGridNodes.map((node) => [node.lat, node.lng])}
           />
           {filteredNodes.map((node) => {
             const { color, size } = getNodeIconProperties(node);
             return (
               <Marker key={node.id} position={[node.lat, node.lng]} icon={createCustomIcon(color, size)}>
                 <Popup>
-                  <div style={{ color: '#1f2937', fontFamily: 'sans-serif', minWidth: '160px' }}>
+                  <div style={{ color: '#1f2937', fontFamily: 'sans-serif', minWidth: '180px' }}>
                     <h4 style={{ margin: '0 0 4px 0', color: '#111827' }}>⚡ {node.id}</h4>
                     <div style={{ fontSize: '0.85rem', margin: '2px 0' }}><strong>Type:</strong> {node.type}</div>
                     <div style={{ fontSize: '0.85rem', margin: '2px 0' }}>
@@ -219,12 +229,11 @@ export default function MapModule() {
         </MapContainer>
       </div>
 
-      {/* Simulated Telemetry Streams Table */}
       <div style={{ marginTop: '2rem' }}>
         <h4 style={{ color: '#9ca3af', marginBottom: '0.75rem', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          Staged Telemetry Node Models (Step 3/4 Target)
+          Live telemetry node cards
         </h4>
-        
+
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
             <thead>
@@ -237,15 +246,15 @@ export default function MapModule() {
               </tr>
             </thead>
             <tbody>
-              {filteredNodes.map(node => (
+              {filteredNodes.map((node) => (
                 <tr key={node.id} style={{ borderBottom: '1px solid #111827', color: '#e5e7eb' }}>
                   <td style={{ padding: '0.75rem 0.5rem', fontWeight: '500' }}>{node.id}</td>
                   <td style={{ padding: '0.75rem 0.5rem' }}>{node.type}</td>
                   <td style={{ padding: '0.75rem 0.5rem' }}>
-                    <span style={{ 
-                      color: getStateColor(node.state), 
-                      background: 'rgba(255,255,255,0.03)', 
-                      padding: '2px 6px', 
+                    <span style={{
+                      color: getStateColor(node.state),
+                      background: 'rgba(255,255,255,0.03)',
+                      padding: '2px 6px',
                       borderRadius: '4px',
                       fontSize: '0.8rem',
                       border: `1px solid ${getStateColor(node.state)}33`
@@ -269,15 +278,15 @@ export default function MapModule() {
             📜 Real-time System Event Log (Reactive Audit Trail)
           </h4>
           <span style={{ fontSize: '0.75rem', color: '#60a5fa', background: 'rgba(96, 165, 250, 0.1)', padding: '2px 6px', borderRadius: '4px' }}>
-            Kafka Sync Pending
+            Live stream enabled
           </span>
         </div>
 
-        <div style={{ 
-          backgroundColor: '#111827', 
-          borderRadius: '6px', 
-          padding: '1rem', 
-          maxHeight: '150px', 
+        <div style={{
+          backgroundColor: '#111827',
+          borderRadius: '6px',
+          padding: '1rem',
+          maxHeight: '150px',
           overflowY: 'auto',
           fontFamily: 'monospace',
           fontSize: '0.85rem',
