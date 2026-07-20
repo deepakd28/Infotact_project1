@@ -1,9 +1,11 @@
-package com.gridviewer.server;
+package com.gridviewer;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.annotation.ComponentScan;
 
 @SpringBootApplication
+@ComponentScan(basePackages = {"com.gridviewer"})
 public class ServerApplication {
 
 	public static void main(String[] args) {
