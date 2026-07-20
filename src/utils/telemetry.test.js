@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeNodeState, applyIncomingNodeUpdates } from './telemetry.js';
+import { normalizeNodeState, applyIncomingNodeUpdates, computeDashboardMetrics } from './telemetry.js';
 
 test('normalizes common telemetry states', () => {
   assert.equal(normalizeNodeState('Charging'), 'Charging');
@@ -29,4 +29,16 @@ test('applies incoming websocket payloads into node updates', () => {
   assert.equal(next['NODE-001'].lng, 77.22);
   assert.equal(next['NODE-001'].status, 'Discharging');
   assert.ok(next['NODE-001'].lastSeen);
+});
+
+test('computes dashboard metrics from live node updates', () => {
+  const metrics = computeDashboardMetrics({
+    'NODE-001': { status: 'Charging', output: '-8.4 MW' },
+    'NODE-002': { status: 'Discharging', output: '+15.2 MW' },
+    'NODE-003': { status: 'Idle', output: '0 MW' }
+  });
+
+  assert.equal(metrics.monitoredNodes, 3);
+  assert.equal(metrics.activeConnections, 2);
+  assert.equal(metrics.totalCapacityMw, 23.6);
 });
