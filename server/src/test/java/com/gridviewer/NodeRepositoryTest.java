@@ -1,12 +1,10 @@
 package com.gridviewer;
 
-import com.gridviewer.models.Node;
-import com.gridviewer.repository.NodeRepository;
+import com.gridviewer.server.model.Node;
+import com.gridviewer.server.repository.NodeRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -18,19 +16,21 @@ class NodeRepositoryTest {
 
     @Test
     void savesAndRetrievesNode() {
-        Node node = new Node("node-1", "SOLAR", 12.97, 77.59);
+        Node node = new Node(1L, "SOLAR", "IDLE", 12.97, 77.59);
         repository.save(node);
 
-        Optional<Node> found = repository.findById("node-1");
-        assertTrue(found.isPresent());
-        assertEquals("SOLAR", found.get().getType());
+        Node found = repository.findById(1L);
+        assertNotNull(found);
+        assertEquals("SOLAR", found.getType());
+        assertEquals("IDLE", found.getState());
     }
 
     @Test
     void deletesNode() {
-        repository.save(new Node("node-2", "BATTERY", 12.90, 77.60));
-        repository.deleteById("node-2");
+        repository.save(new Node(2L, "BATTERY", "CHARGING", 12.90, 77.60));
+        repository.delete(2L);
 
-        assertFalse(repository.existsById("node-2"));
+        assertFalse(repository.exists(2L));
+        assertNull(repository.findById(2L));
     }
 }

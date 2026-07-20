@@ -1,6 +1,8 @@
 package com.gridviewer;
 
 import com.gridviewer.models.TelemetryEvent;
+import com.gridviewer.server.model.Node;
+import com.gridviewer.server.repository.NodeRepository;
 import com.gridviewer.service.TelemetryQueue;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,9 +21,14 @@ class TelemetryPipelineTest {
     @Autowired
     private TelemetryQueue telemetryQueue;
 
+    @Autowired
+    private NodeRepository nodeRepository;
+
     @BeforeEach
     void setUp() {
         telemetryQueue.clear();
+        nodeRepository.save(new Node(101L, "SOLAR", "ACTIVE", 12.97, 77.59));
+        nodeRepository.save(new Node(202L, "BATTERY", "CHARGING", 12.90, 77.60));
     }
 
     @Test
@@ -33,7 +40,7 @@ class TelemetryPipelineTest {
             // Send standard telemetry events
             writer.println("node-101:status=ACTIVE,battery=94%");
             writer.println("node-202:status=CHARGING,battery=12%");
-            // Send event with no colon (should fallback to unknown nodeId)
+            // Send event with no colon (should fallback to unknown nodeId, which will be dropped)
             writer.println("system-reboot-event");
             // Send empty line (should be ignored/not produce event)
             writer.println("");
@@ -52,14 +59,8 @@ class TelemetryPipelineTest {
         assertEquals("status=CHARGING,battery=12%", event2.payload());
         assertNotNull(event2.timestamp());
 
-        TelemetryEvent event3 = telemetryQueue.poll(5, TimeUnit.SECONDS);
-        assertNotNull(event3, "Third event should be present");
-        assertEquals("unknown", event3.nodeId());
-        assertEquals("system-reboot-event", event3.payload());
-        assertNotNull(event3.timestamp());
-
-        // Verify no more events are queued
-        TelemetryEvent emptyEvent = telemetryQueue.poll(500, TimeUnit.MILLISECONDS);
-        assertNull(emptyEvent, "There should be no other events in the queue");
+        // Verify the unknown event is dropped, meaning there are no other events in the queue
+        TelemetryEvent emptyEvent = telemetryQueue.poll(1, TimeUnit.SECONDS);
+        assertNull(emptyEvent, "The unknown event should have been dropped and the queue should be empty");
     }
 }
