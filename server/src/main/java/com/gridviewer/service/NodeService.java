@@ -1,11 +1,11 @@
-package com.gridviewer.server.service;
+package com.gridviewer.service;
 
 import java.util.List;
 
 import org.springframework.stereotype.Service;
 
-import com.gridviewer.server.model.Node;
-import com.gridviewer.server.repository.NodeRepository;
+import com.gridviewer.models.Node;
+import com.gridviewer.repository.NodeRepository;
 
 @Service
 public class NodeService {

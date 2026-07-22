@@ -1,4 +1,4 @@
-package com.gridviewer.server.controller;
+package com.gridviewer.controller;
 
 import java.util.List;
 
@@ -13,8 +13,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.gridviewer.server.model.Node;
-import com.gridviewer.server.service.NodeService;
+import com.gridviewer.models.Node;
+import com.gridviewer.service.NodeService;
 
 @RestController
 @RequestMapping("/api/nodes")

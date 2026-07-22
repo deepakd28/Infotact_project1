@@ -1,8 +1,8 @@
 package com.gridviewer;
 
 import com.gridviewer.models.TelemetryEvent;
-import com.gridviewer.server.model.Node;
-import com.gridviewer.server.repository.NodeRepository;
+import com.gridviewer.models.Node;
+import com.gridviewer.repository.NodeRepository;
 import com.gridviewer.service.TelemetryQueue;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

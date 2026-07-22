@@ -1,7 +1,7 @@
 package com.gridviewer;
 
-import com.gridviewer.server.model.Node;
-import com.gridviewer.server.repository.NodeRepository;
+import com.gridviewer.models.Node;
+import com.gridviewer.repository.NodeRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
