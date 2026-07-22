@@ -1,14 +1,15 @@
-package com.gridviewer.server.repository;
+package com.gridviewer.repository;
 
-import com.gridviewer.server.model.Node;
+import com.gridviewer.models.Node;
 import org.springframework.stereotype.Repository;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Repository
 public class NodeRepository {
 
-    private final Map<Long, Node> nodes = new HashMap<>();
+    private final Map<Long, Node> nodes = new ConcurrentHashMap<>();
 
     public List<Node> findAll() {
         return new ArrayList<>(nodes.values());

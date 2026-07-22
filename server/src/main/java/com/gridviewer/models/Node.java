@@ -1,4 +1,4 @@
-package com.gridviewer.server.model;
+package com.gridviewer.models;
 
 public class Node {
 

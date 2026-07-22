@@ -1,7 +1,7 @@
 package com.gridviewer.service;
 
 import com.gridviewer.models.TelemetryEvent;
-import com.gridviewer.server.repository.NodeRepository;
+import com.gridviewer.repository.NodeRepository;
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.BlockingQueue;
