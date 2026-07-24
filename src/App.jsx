@@ -4,6 +4,30 @@ import { useGridSocket } from './hooks/useGridSocket';
 import { applyIncomingNodeUpdates, computeDashboardMetrics, formatPowerValue } from './utils/telemetry';
 import './App.css';
 
+// Helper to pre-generate 3,000 test nodes for the initial App state
+const generateInitial3000Nodes = () => {
+  const nodes = {};
+  const states = ['Idle', 'Charging', 'Discharging'];
+
+  for (let i = 1; i <= 3000; i++) {
+    const id = `GRID-NODE-${i.toString().padStart(4, '0')}`;
+    const state = states[i % states.length];
+    
+    let powerMw = 0;
+    if (state === 'Discharging') powerMw = parseFloat((Math.random() * 18 + 2).toFixed(1));
+    else if (state === 'Charging') powerMw = parseFloat((-(Math.random() * 12 + 1)).toFixed(1));
+
+    nodes[id] = {
+      id,
+      state,
+      status: state,
+      output: powerMw !== 0 ? `${powerMw > 0 ? '+' : ''}${powerMw} MW` : '0 MW',
+      powerMw
+    };
+  }
+  return nodes;
+};
+
 function SparklineMini({ values, accent }) {
   const width = 84;
   const height = 46;
@@ -23,7 +47,7 @@ function SparklineMini({ values, accent }) {
   );
 }
 
-function RadialMeter({ accent, progress = 0.68 }) {
+function RadialMeter({ accent, progress = 0.06 }) {
   const radius = 20;
   const circumference = 2 * Math.PI * radius;
 
@@ -39,7 +63,7 @@ function RadialMeter({ accent, progress = 0.68 }) {
         fill="none"
         strokeLinecap="round"
         strokeDasharray={circumference}
-        strokeDashoffset={circumference * (1 - progress)}
+        strokeDashoffset={circumference * (1 - Math.min(Math.max(progress, 0), 1))}
         transform="rotate(-90 28 28)"
       />
     </svg>
@@ -49,11 +73,9 @@ function RadialMeter({ accent, progress = 0.68 }) {
 function App() {
   const socketUrl = import.meta.env.VITE_GRID_SOCKET_URL || 'ws://localhost:8080/telemetry';
   const { isConnected, latestData } = useGridSocket(socketUrl);
-  const [liveNodeUpdates, setLiveNodeUpdates] = useState(() => ({
-    'NODE-001': { id: 'NODE-001', state: 'Idle', status: 'Idle', output: '0 MW' },
-    'NODE-002': { id: 'NODE-002', state: 'Discharging', status: 'Discharging', output: '+15.2 MW' },
-    'NODE-003': { id: 'NODE-003', state: 'Charging', status: 'Charging', output: '-8.4 MW' }
-  }));
+
+  // Initialize with 3,000 nodes instead of the 3 hardcoded nodes
+  const [liveNodeUpdates, setLiveNodeUpdates] = useState(generateInitial3000Nodes);
   const [lastUpdated, setLastUpdated] = useState(() => new Date());
 
   useEffect(() => {
@@ -76,6 +98,10 @@ function App() {
 
   const dashboardMetrics = useMemo(() => computeDashboardMetrics(liveNodeUpdates), [liveNodeUpdates]);
 
+  // Derived count and calculated progress for the radial meter (e.g., 3,000 / 50,000 = 0.06)
+  const nodeCount = dashboardMetrics.monitoredNodes || Object.keys(liveNodeUpdates).length;
+  const radialProgress = nodeCount / 50000;
+
   const kpiCards = [
     {
       label: 'Simulated Loom Connections',
@@ -87,11 +113,12 @@ function App() {
     },
     {
       label: 'Monitored Microgrid Nodes',
-      value: dashboardMetrics.monitoredNodes,
+      value: nodeCount.toLocaleString(),
       total: '/ 50,000',
       subvalue: isConnected ? 'Live telemetry tracked' : 'Awaiting telemetry',
       accent: '#00E676',
-      visual: 'radial'
+      visual: 'radial',
+      progress: radialProgress
     },
     {
       label: 'Current Generation Capacity',
@@ -132,7 +159,7 @@ function App() {
               {card.visual === 'sparkline' ? (
                 <SparklineMini values={card.sparkValues} accent={card.accent} />
               ) : (
-                <RadialMeter accent={card.accent} />
+                <RadialMeter accent={card.accent} progress={card.progress} />
               )}
             </div>
           </div>
@@ -161,15 +188,17 @@ function App() {
 
           <div className="status-panel__details">
             <div className="status-chip">Updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-            <div className="status-chip">Nodes monitored {dashboardMetrics.monitoredNodes}</div>
+            <div className="status-chip">Nodes monitored {nodeCount.toLocaleString()}</div>
             <div className="status-chip">Capacity {formatPowerValue(dashboardMetrics.totalCapacityMw)}</div>
           </div>
         </div>
       </section>
 
       <main style={{ padding: '1.5rem' }}>
-        <MapModule />
-      </main>
+  <MapModule onMetricsChange={(metrics) => {
+    // Syncs map metrics back into App state if needed
+  }} />
+</main>
     </div>
   );
 }
